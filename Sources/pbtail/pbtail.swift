@@ -4,7 +4,8 @@ import Foundation
 @main
 private struct Pbtail: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "pbtail watches system clipboard and prints text content to stdout."
+        abstract: "pbtail watches system clipboard and prints text content to stdout.",
+        version: "1.0.0"
     )
 
     @OptionGroup(title: "OUTPUT FORMAT OPTIONS")
