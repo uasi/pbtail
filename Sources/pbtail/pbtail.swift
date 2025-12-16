@@ -1,8 +1,8 @@
 import ArgumentParser
-import Cocoa
+import Foundation
 
 @main
-struct Pbtail: AsyncParsableCommand {
+private struct Pbtail: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "pbtail watches system clipboard and prints text content to stdout."
     )
@@ -42,7 +42,7 @@ struct Pbtail: AsyncParsableCommand {
     }
 }
 
-enum OutputFormat: EnumerableFlag {
+public enum OutputFormat: EnumerableFlag, Sendable {
     case newline
     case newlineAlways
     case nul
@@ -50,7 +50,7 @@ enum OutputFormat: EnumerableFlag {
     case json
     case jsonValue
 
-    static func name(for value: Self) -> NameSpecification {
+    public static func name(for value: Self) -> NameSpecification {
         switch value {
         case .newline:
             return [.customShort("n"), .long]
@@ -67,7 +67,7 @@ enum OutputFormat: EnumerableFlag {
         }
     }
 
-    static func help(for value: Self) -> ArgumentHelp? {
+    public static func help(for value: Self) -> ArgumentHelp? {
         switch value {
         case .newline:
             return "Add newline if output doesn't already end with one."
@@ -86,13 +86,13 @@ enum OutputFormat: EnumerableFlag {
     }
 }
 
-enum OutputMode: EnumerableFlag {
+public enum OutputMode: EnumerableFlag, Sendable {
     case allowEmpty
     case dedupe
     case printInitialValue
     case printAndExit
 
-    static func name(for value: Self) -> NameSpecification {
+    public static func name(for value: Self) -> NameSpecification {
         switch value {
         case .allowEmpty:
             return [.customShort("a"), .long]
@@ -105,7 +105,7 @@ enum OutputMode: EnumerableFlag {
         }
     }
 
-    static func help(for value: Self) -> ArgumentHelp? {
+    public static func help(for value: Self) -> ArgumentHelp? {
         switch value {
         case .allowEmpty:
             return
@@ -120,110 +120,7 @@ enum OutputMode: EnumerableFlag {
     }
 }
 
-actor ClipboardWatcher: Sendable {
-    private let outputFormat: OutputFormat
-    private let outputModes: [OutputMode]
-    private let pollingInterval: Int
-
-    private var changeCount: Int
-    private var shouldKeepRunning = true
-    private var lastPrintedContent: String?
-
-    init(
-        outputFormat: OutputFormat, outputModes: [OutputMode], pollingInterval: Int
-    ) {
-        self.outputFormat = outputFormat
-        self.outputModes = outputModes
-        self.pollingInterval = pollingInterval
-        self.changeCount = NSPasteboard.general.changeCount
-        self.lastPrintedContent = nil
-    }
-
-    func watch() async {
-        let pasteboard = NSPasteboard.general
-
-        if outputModes.contains(.printInitialValue) {
-            echo()
-        }
-
-        while shouldKeepRunning {
-            do {
-                try await Task.sleep(nanoseconds: UInt64(pollingInterval) * 1_000_000)
-            } catch {
-                break
-            }
-
-            if changeCount != pasteboard.changeCount {
-                changeCount = pasteboard.changeCount
-                echo()
-            }
-        }
-    }
-
-    func stop() {
-        shouldKeepRunning = false
-    }
-
-    func echo() {
-        let content: String? =
-            switch NSPasteboard.general.string(forType: .string) {
-            case nil where outputModes.contains(.allowEmpty): ""
-            case let content: content
-            }
-
-        guard let content = content else {
-            return
-        }
-
-        if outputModes.contains(.dedupe) && lastPrintedContent == content {
-            return
-        }
-
-        let output = serialize(content, outputFormat: outputFormat)
-        let terminator = terminatorForOutput(output, outputFormat: outputFormat)
-
-        print(output, terminator: terminator)
-        fflush(stdout)
-
-        lastPrintedContent = content
-    }
-}
-
-func serialize(_ content: String, outputFormat: OutputFormat) -> String {
-    switch outputFormat {
-    case .json, .jsonValue:
-        var json: [String: Any] = ["content": content]
-
-        if outputFormat == .jsonValue,
-            let data = content.data(using: .utf8),
-            let parsed = try? JSONSerialization.jsonObject(
-                with: data, options: [.fragmentsAllowed])
-        {
-            json["value"] = parsed
-        }
-
-        let data = try! JSONSerialization.data(
-            withJSONObject: json,
-            options: [.sortedKeys, .withoutEscapingSlashes])
-
-        return String(data: data, encoding: .utf8)!
-    default:
-        return content
-    }
-}
-
-func terminatorForOutput(_ output: String, outputFormat: OutputFormat) -> String {
-    switch outputFormat {
-    case .newline: output.hasSuffix("\n") ? "" : "\n"
-    case .newlineAlways: "\n"
-    case .nul: "\0"
-    case .raw: ""
-    case .json: "\n"
-    case .jsonValue: "\n"
-    }
-}
-
-func setSignalHandler(watcher: ClipboardWatcher) {
+private func setSignalHandler(watcher: ClipboardWatcher) {
     signal(SIGINT, SIG_DFL)
 
     let source = DispatchSource.makeSignalSource(signal: SIGINT)
