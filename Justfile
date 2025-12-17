@@ -43,7 +43,7 @@ prepare-release version:
     [[ "$(release/pbtail --version)" = {{ quote(version) }} ]]
 
     # Sign release artifacts
-    command -v minisign-op >/dev/null 2>&1 && minisign-op -S -m release/pbtail.zip
+    command -v minisign >/dev/null 2>&1 && minisign -S -m release/pbtail.zip
 
     # Create a signed tag
     git tag -s -m v{{ quote(version) }} v{{ quote(version) }}
