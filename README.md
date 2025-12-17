@@ -2,6 +2,10 @@
 
 `pbtail` watches system clipboard and prints text content to stdout.
 
+## Requirements
+
+- macOS 15 or higher
+
 ## Installation
 
 ```sh
